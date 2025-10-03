@@ -1130,3 +1130,24 @@ class MultiperspectivePerceptronTAGE8KB(MultiperspectivePerceptronTAGE):
     tage = MPP_TAGE_8KB()
     loop_predictor = MPP_LoopPredictor_8KB()
     statistical_corrector = MPP_StatisticalCorrector_8KB()
+
+class ITTAGE(IndirectPredictor):
+    type = "ITTAGE"
+    cxx_class = "gem5::branch_prediction::ITTAGE"
+    cxx_header = "cpu/pred/ittage.hh"
+
+    n_tables = Param.Unsigned(4, "Number of ITTAGE tables")
+
+    base_table_size = Param.Unsigned(256, "Size of base direct-mapped table")
+
+    global_hist_len = Param.Unsigned(64, "Length of global history register")
+
+    base_hist_len = Param.Unsigned(4, "Base history length")
+
+    alloc_threshold = Param.Unsigned(2, "Threshold for allocating new entries")
+
+    table_sizes = VectorParam.Unsigned(
+        [256, 512, 1024, 2048], "Sizes of predictor tables"
+    )
+
+    tag_bits = VectorParam.Unsigned([10, 10, 12, 12], "Tag width per table (bits)")

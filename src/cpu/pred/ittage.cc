@@ -138,8 +138,11 @@ void ITTAGE::update(ThreadID tid, InstSeqNum sn, Addr pc, bool squash,
     }
 
     if (br_type != BranchType::IndirectUncond &&
-        br_type != BranchType::IndirectCond) {
-        DPRINTF(ITTAGE_Debug, "Update: not an indirect branch, skipping\n");
+        br_type != BranchType::IndirectCond &&
+        br_type != BranchType::CallIndirect) {
+        DPRINTF(ITTAGE_Debug,
+                "Update: not an indirect branch, skipping (br_type=%d)\n",
+                static_cast<int>(br_type));
         delete hist;
         i_history = nullptr;
         return;
@@ -155,6 +158,11 @@ void ITTAGE::update(ThreadID tid, InstSeqNum sn, Addr pc, bool squash,
             histHash ^= (1ULL << (i % 64));
         }
     }
+
+    DPRINTF(ITTAGE_Debug,
+            "Update: tid=%d, sn=%llu, pc=%#lx, histHash=%#lx, taken=%d, "
+            "target=%#lx, correct=%d\n",
+            tid, sn, pc, histHash, taken, target_addr, prediction_correct);
 
     if (hist->hit) {
         ITTAGEEntry *entry = const_cast<ITTAGEEntry *>(hist->entry);
@@ -172,49 +180,49 @@ void ITTAGE::update(ThreadID tid, InstSeqNum sn, Addr pc, bool squash,
                 entry->u);
     }
 
-    if (!prediction_correct && taken) {
+    if (!hist->hit) {
         int alloc_table = -1;
-        for (unsigned i = hist->hit ? hist->table + 1 : 1; i < nTables; ++i) {
+        for (unsigned i = 0; i < nTables; ++i) {  // Проверяем все таблицы
             uint64_t idx = (pc ^ (histHash >> (i * 2))) % tableSizes[i];
             uint64_t tag = (pc ^ histHash) & ((1ULL << tagWidths[i]) - 1);
             ITTAGEEntry &entry = tables[i][idx];
 
-            if (entry.ctr == 0 || (entry.u == 0 && entry.ctr <= 0)) {
+            DPRINTF(ITTAGE_Debug,
+                    "Checking allocation: table=%d, idx=%#lx, tag=%#lx, "
+                    "entry_ctr=%d, entry_u=%d\n",
+                    i, idx, tag, entry.ctr, entry.u);
+
+            if (entry.ctr == 0) {
                 entry.target = target_addr;
                 entry.tag = tag;
                 entry.ctr = 1;
-                entry.u = 0;
+                entry.u = 1;
                 alloc_table = i;
                 allocations++;
+                DPRINTF(ITTAGE_Debug,
+                        "Allocated new entry: tid=%d, sn=%llu, pc=%#lx, "
+                        "table=%d, target=%#lx, ctr=%d, u=%d\n",
+                        tid, sn, pc, alloc_table, target_addr, entry.ctr,
+                        entry.u);
                 break;
             }
         }
 
-        if (alloc_table != -1) {
+        if (alloc_table == -1) {
+            unsigned i = nTables - 1;
+            uint64_t idx = (pc ^ (histHash >> (i * 2))) % tableSizes[i];
+            uint64_t tag = (pc ^ histHash) & ((1ULL << tagWidths[i]) - 1);
+            ITTAGEEntry &entry = tables[i][idx];
+            entry.target = target_addr;
+            entry.tag = tag;
+            entry.ctr = 1;
+            entry.u = 1;
+            alloc_table = i;
+            allocations++;
             DPRINTF(ITTAGE_Debug,
-                    "Allocated new entry: tid=%d, sn=%llu, pc=%#lx, "
-                    "table=%d, target=%#lx\n",
-                    tid, sn, pc, alloc_table, target_addr);
-        } else if (hist->hit && hist->table < static_cast<int>(nTables) - 1) {
-            for (unsigned i = hist->table + 1; i < nTables; ++i) {
-                uint64_t idx = (pc ^ (histHash >> (i * 2))) % tableSizes[i];
-                ITTAGEEntry &entry = tables[i][idx];
-                if (entry.u == 0) {
-                    entry.target = target_addr;
-                    entry.tag = (pc ^ histHash) & ((1ULL << tagWidths[i]) - 1);
-                    entry.ctr = 1;
-                    entry.u = 0;
-                    alloc_table = i;
-                    allocations++;
-                    break;
-                }
-            }
-            if (alloc_table != -1) {
-                DPRINTF(ITTAGE_Debug,
-                        "Stole entry: tid=%d, sn=%llu, pc=%#lx, table=%d, "
-                        "target=%#lx\n",
-                        tid, sn, pc, alloc_table, target_addr);
-            }
+                    "Forced allocation: tid=%d, sn=%llu, pc=%#lx, table=%d, "
+                    "target=%#lx, ctr=%d, u=%d\n",
+                    tid, sn, pc, alloc_table, target_addr, entry.ctr, entry.u);
         }
     }
 

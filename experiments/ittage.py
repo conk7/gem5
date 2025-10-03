@@ -1,33 +1,24 @@
 from gem5.resources.resource import BinaryResource
 from gem5.simulate.simulator import Simulator
-from m5.objects import ITTAGE, TournamentBP, SimpleBTB, ReturnAddrStack
+from m5.objects import ITTAGE, TAGE
 
 from gem5.prebuilt.riscvmatched.riscvmatched_board import RISCVMatchedBoard
 
 
-class U74BP(TournamentBP):
-    btb = SimpleBTB(numEntries=32)
-    ras = ReturnAddrStack(numEntries=12)  #
-    localHistoryTableSize = 4096
-    localPredictorSize = 16384
-    globalPredictorSize = 16384
-    choicePredictorSize = 16384
-    localCtrBits = 4
-    globalCtrBits = 4
-    choiceCtrBits = 4
+class MyBP(TAGE):
     indirectBranchPred = ITTAGE(
-        n_tables=2,
+        n_tables=4,
         base_table_size=256,
         global_hist_len=64,
         base_hist_len=4,
         alloc_threshold=2,
-        table_sizes=[32, 64],
-        tag_bits=[10, 10],
+        table_sizes=[256, 512, 1024, 2048],
+        tag_bits=[10, 10, 12, 12],
         numThreads=1,
     )
 
 
-branch_predictor = U74BP()
+branch_predictor = MyBP()
 
 board = RISCVMatchedBoard()
 board.processor.cores[0].core.branchPred = branch_predictor

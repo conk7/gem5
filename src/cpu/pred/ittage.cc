@@ -182,7 +182,7 @@ void ITTAGE::update(ThreadID tid, InstSeqNum sn, Addr pc, bool squash,
 
     if (!hist->hit) {
         int alloc_table = -1;
-        for (unsigned i = 0; i < nTables; ++i) {  // Проверяем все таблицы
+        for (unsigned i = 0; i < nTables; ++i) {
             uint64_t idx = (pc ^ (histHash >> (i * 2))) % tableSizes[i];
             uint64_t tag = (pc ^ histHash) & ((1ULL << tagWidths[i]) - 1);
             ITTAGEEntry &entry = tables[i][idx];
